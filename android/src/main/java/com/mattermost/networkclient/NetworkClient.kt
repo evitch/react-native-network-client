@@ -23,7 +23,6 @@ import kotlin.collections.ArrayList
 import kotlin.collections.HashMap
 import kotlin.reflect.KProperty
 
-
 internal class NetworkClient(private val baseUrl: HttpUrl? = null, options: ReadableMap? = null, cookieJar: CookieJar? = null) {
     var okHttpClient: OkHttpClient
     private var webSocketUri: URI? = null
@@ -39,7 +38,8 @@ internal class NetworkClient(private val baseUrl: HttpUrl? = null, options: Read
     private val BASE_URL_STRING = baseUrl.toString().trimTrailingSlashes()
     private val BASE_URL_HASH = BASE_URL_STRING.sha256()
     private val TOKEN_ALIAS = "$BASE_URL_HASH-TOKEN"
-    private val P12_ALIAS = "$BASE_URL_HASH-P12"
+    private val DEFAULT_P12_ALIAS  = "$BASE_URL_HASH-P12";
+    private var P12_ALIAS  = "$BASE_URL_HASH-P12";
 
     companion object RequestRetriesExhausted {
         private val requestRetriesExhausted: HashMap<Response, Boolean?> = hashMapOf()
@@ -382,7 +382,7 @@ internal class NetworkClient(private val baseUrl: HttpUrl? = null, options: Read
                 } else {
                     ""
                 }
-
+                P12_ALIAS = path.substring(path.lastIndexOf('/') + 1);
                 try {
                     importClientP12(path, password)
                 } catch (error: Exception) {
@@ -401,7 +401,8 @@ internal class NetworkClient(private val baseUrl: HttpUrl? = null, options: Read
         if (baseUrl == null)
             return null
 
-        val (heldCertificate, intermediates) = KeyStoreHelper.getClientCertificates(P12_ALIAS)
+        val directAccessMode = DEFAULT_P12_ALIAS != P12_ALIAS;
+        val (heldCertificate, intermediates) = KeyStoreHelper.getClientCertificates(P12_ALIAS, directAccessMode)
 
         if (!trustSelfSignedServerCertificate && heldCertificate == null)
             return null
@@ -430,7 +431,8 @@ internal class NetworkClient(private val baseUrl: HttpUrl? = null, options: Read
     private fun importClientP12(p12FilePath: String, password: String) {
         val contentUri = Uri.parse(p12FilePath)
         val realPath = DocumentHelper.getRealPath(contentUri)
-        KeyStoreHelper.importClientCertificateFromP12(realPath, password, P12_ALIAS)
+        val directAccessMode = DEFAULT_P12_ALIAS != P12_ALIAS;
+        KeyStoreHelper.importClientCertificateFromP12(realPath, password, P12_ALIAS, directAccessMode)
     }
 
     private fun setClientRetryInterceptor(options: ReadableMap?) {

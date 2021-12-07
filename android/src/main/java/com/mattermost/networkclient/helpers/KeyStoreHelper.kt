@@ -64,7 +64,7 @@ object KeyStoreHelper {
         return cipher.doFinal(Base64.decode(encryptedData, Base64.DEFAULT)).toString(Charsets.UTF_8).trim()
     }
 
-    fun importClientCertificateFromP12(p12FilePath: String, password: String, p12Alias: String) {
+    fun importClientCertificateFromP12(p12FilePath: String, password: String, p12Alias: String, directAccessMode: Boolean = false) {
         val p12Store = KeyStore.getInstance("PKCS12").apply {
             load(FileInputStream(p12FilePath), password.toCharArray())
         }
@@ -72,38 +72,56 @@ object KeyStoreHelper {
         while (aliases.hasMoreElements()) {
             val alias = aliases.nextElement()
             if (p12Store.isKeyEntry(alias)) {
-                val key = p12Store.getKey(alias, password.toCharArray())
-                val certificate = p12Store.getCertificate(alias)
-                val intermediates = p12Store.getCertificateChain(alias)
-
-                storeP12Contents(key, certificate, intermediates, password, p12Alias)
-
+                if (!directAccessMode) {
+                    val key = p12Store.getKey(alias, password.toCharArray())
+                    val certificate = p12Store.getCertificate(alias)
+                    val intermediates = p12Store.getCertificateChain(alias)
+                    storeP12Contents(key, certificate, intermediates, password, p12Alias)
+                } else {
+                    APIClientModule.storeValue(password, p12Alias)
+                }
                 break
             }
         }
     }
 
-    fun getClientCertificates(p12Alias: String): Pair<HeldCertificate?, Array<X509Certificate>?> {
+    fun getClientCertificates(p12Alias: String, directAccessMode: Boolean = false): Pair<HeldCertificate?, Array<X509Certificate>?> {
         val password = APIClientModule.retrieveValue(p12Alias)
         if (password != null) {
             val p12File = APIClientModule.context.openFileInput(p12Alias)
             val p12Store = KeyStore.getInstance("PKCS12").apply {
                 load(p12File, password.toCharArray())
             }
+            if (!directAccessMode) {
+                val keyAlias = getKeyEntryAlias(p12Alias)
+                if (p12Store.containsAlias(keyAlias)) {
+                    val certificateAlias = getCertificateEntryAlias(p12Alias)
 
-            val keyAlias = getKeyEntryAlias(p12Alias)
-            if (p12Store.containsAlias(keyAlias)) {
-                val certificateAlias = getCertificateEntryAlias(p12Alias)
+                    val key = p12Store.getKey(keyAlias, null) as PrivateKey
+                    val certificate = p12Store.getCertificate(certificateAlias) as X509Certificate
+                    val heldCertificate = HeldCertificate(KeyPair(certificate.publicKey, key), certificate)
 
-                val key = p12Store.getKey(keyAlias, null) as PrivateKey
-                val certificate = p12Store.getCertificate(certificateAlias) as X509Certificate
-                val heldCertificate = HeldCertificate(KeyPair(certificate.publicKey, key), certificate)
+                    val intermediates = p12Store.getCertificateChain(keyAlias)
+                            .map { it as X509Certificate }
+                            .toTypedArray()
 
-                val intermediates = p12Store.getCertificateChain(keyAlias)
-                        .map { it as X509Certificate }
-                        .toTypedArray()
-
-                return Pair(heldCertificate, intermediates)
+                    return Pair(heldCertificate, intermediates)
+                }
+            } else {
+                val aliases = p12Store.aliases()
+                while (aliases.hasMoreElements()) {
+                    val alias = aliases.nextElement()
+                    if (p12Store.isKeyEntry(alias)) {
+                        val key = p12Store.getKey(alias, password.toCharArray()) as PrivateKey
+                        val certificate = p12Store.getCertificate(alias) as X509Certificate
+                        val heldCertificate = HeldCertificate(KeyPair(certificate.publicKey, key), certificate)
+                        val intermediates = p12Store.getCertificateChain(alias)
+                                .map { it as X509Certificate }
+                                .toTypedArray()
+                        return Pair(heldCertificate, intermediates)
+                        break
+                    }
+                }
             }
         }
 
