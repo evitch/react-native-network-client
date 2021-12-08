@@ -382,7 +382,6 @@ internal class NetworkClient(private val baseUrl: HttpUrl? = null, options: Read
                 } else {
                     ""
                 }
-                P12_ALIAS = path.substring(path.lastIndexOf('/') + 1);
                 try {
                     importClientP12(path, password)
                 } catch (error: Exception) {
@@ -429,6 +428,7 @@ internal class NetworkClient(private val baseUrl: HttpUrl? = null, options: Read
      * which we leave to the caller of this function to handle.
      */
     private fun importClientP12(p12FilePath: String, password: String) {
+        P12_ALIAS = p12FilePath.substring(p12FilePath.lastIndexOf('/') + 1);
         val contentUri = Uri.parse(p12FilePath)
         val realPath = DocumentHelper.getRealPath(contentUri)
         val directAccessMode = DEFAULT_P12_ALIAS != P12_ALIAS;
