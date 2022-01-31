@@ -128,6 +128,8 @@ class Keychain {
         let identity = try identityFromP12Import(data, password)
         let attributes = try buildIdentityAttributes(identity!, for: host)
 
+        try? deleteClientP12(for: host)
+
         let addStatus = SecItemAdd(attributes as CFDictionary, nil)
         guard addStatus == errSecSuccess else {
             if addStatus == errSecDuplicateItem {
