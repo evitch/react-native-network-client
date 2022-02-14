@@ -141,7 +141,9 @@ public class SessionManager: NSObject {
         }
         
         if reset {
-            session.session.reset {
+            let group = DispatchGroup()
+            group.enter()
+            session.session.reset(completionHandler: { () -> Void in
                 do {
                     try Keychain.deleteAll(for: baseUrl.absoluteString)
                 } catch {
@@ -151,7 +153,11 @@ public class SessionManager: NSObject {
                 }
                 session.session.invalidateAndCancel()
                 self.sessions.removeValue(forKey: baseUrl)
-            }
+                
+                group.leave();
+            });
+            
+            group.wait();
         } else {
             session.session.invalidateAndCancel()
             self.sessions.removeValue(forKey: baseUrl)
